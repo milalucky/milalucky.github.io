@@ -180,11 +180,14 @@ button{font-family:var(--f);color:inherit}
 .lib-f{display:grid;gap:10px}.lib-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px}.lib-row>.c5{width:84px}
 .lib-row .chips button{cursor:pointer;transition:background .2s,color .2s}.lib-row .chips button[aria-pressed="true"]{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
 .lib-q{display:grid;gap:10px}.lib-q:empty{display:none}
-.lib-qs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(260px,320px);gap:12px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:8px;align-items:start;scrollbar-width:thin}
-.lib-qt{margin:0;padding:16px 18px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:8px;scroll-snap-align:start;cursor:pointer;transition:border-color .2s}
-.lib-qt:hover,.lib-qt:focus-visible{border-color:var(--acc);outline:none}
-.lib-qt blockquote{margin:0;font:italic 400 17px/24px "Cormorant Garamond",Georgia,serif;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}.lib-qt.open blockquote{-webkit-line-clamp:unset}
-.lib-qt figcaption{font-size:12px;line-height:16px;color:var(--mut)}
+.lib-qc{display:grid;gap:10px;padding:20px 24px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+.lib-qs{display:grid}.lib-qt{grid-area:1/1;margin:0;display:grid;gap:8px;align-content:center;opacity:0;transform:translateY(6px);transition:opacity .6s var(--ease),transform .6s var(--ease);pointer-events:none}
+.lib-qt.on{opacity:1;transform:none;pointer-events:auto}
+.lib-qt blockquote{margin:0;font:italic 400 22px/31px "Cormorant Garamond",Georgia,serif;max-width:78ch;text-wrap:pretty}
+.lib-qt figcaption{font-size:13px;line-height:18px;color:var(--mut)}
+.lib-qn{display:flex;align-items:center;gap:8px}.lib-dot{width:8px;height:8px;padding:0;border:0;border-radius:50%;background:var(--line);cursor:pointer;transition:background .3s,transform .3s}
+.lib-dot[aria-current="true"]{background:var(--acc);transform:scale(1.3)}.lib-dot:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+@media (max-width:640px){.lib-qt blockquote{font-size:19px;line-height:27px}}
 .lib-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:24px 18px}
 .lib-it{all:unset;cursor:pointer;display:grid;gap:8px;align-content:start;min-width:0}
 .lib-cv{position:relative;aspect-ratio:2/3;max-width:100%;border-radius:10px;overflow:hidden;background:var(--c);display:grid;place-items:center;padding:0;box-shadow:0 10px 24px rgba(0,0,0,.35);transition:transform .4s var(--ease),box-shadow .4s var(--ease)}
@@ -1810,7 +1813,13 @@ const ISO_CSS = `
   // ── full-screen library: every book or film at once, filtered by genre and rating ──
   const lib = document.querySelector("[data-libp]"), libF = lib.querySelector("[data-lib-f]"), libG = lib.querySelector("[data-lib-g]"),
     libQ = lib.querySelector("[data-lib-q]"), libN = lib.querySelector("[data-lib-n]");
-  let libKind = null, libOpener = null, pick = {};
+  let libKind = null, libOpener = null, pick = {}, qi = 0, qTimer = 0, qHold = false;
+  // one quote at a time: all quotes share one grid cell, so the strip keeps the height of the longest
+  const showQ = (i) => { const n = D.quotes.length; if (!n) return; qi = (i + n) % n;
+    libQ.querySelectorAll(".lib-qt").forEach((f, j) => { f.classList.toggle("on", j === qi); f.setAttribute("aria-hidden", String(j !== qi)); });
+    libQ.querySelectorAll(".lib-dot").forEach((d, j) => d.setAttribute("aria-current", String(j === qi))); };
+  const qPlay = () => { clearInterval(qTimer); if (!still) qTimer = setInterval(() => { if (!qHold && !lib.hidden && libQ.childElementCount) showQ(qi + 1); }, 8000); };
+  libQ.addEventListener("pointerenter", () => { qHold = true; }); libQ.addEventListener("pointerleave", () => { qHold = false; });
   const tally = (list, f) => list.reduce((m, it) => (m.set(f(it), (m.get(f(it)) || 0) + 1), m), new Map());
   const chips = (key, label, entries) => `<div class="lib-row"><span class="c5 mut">${label}</span><div class="chips big" role="group" aria-label="${label}">`
     + [["", "All"], ...entries].map(([v, t]) => `<button type="button" data-k="${key}" data-v="${esc(v)}" aria-pressed="${String((pick[key] ?? "") === String(v))}">${esc(t)}</button>`).join("") + `</div></div>`;
@@ -1824,19 +1833,21 @@ const ISO_CSS = `
     libG.innerHTML = shown.map(([it, i]) => `<button type="button" class="lib-it" data-i="${i}" style="--c:${it.c}" aria-label="${esc(it.t)}, ${books ? it.r + " of 5" : it.r + " of 10"}">
       <span class="lib-cv">${it.cover ? `<img src="${it.cover}" alt="" loading="lazy">` : `<b>${esc(it.t)}</b>`}<i class="lib-r">${books ? "★ " + it.r : it.r}</i>${it.fav ? '<i class="lib-fav">♥</i>' : ""}</span>
       <span class="lib-cap"><b>${esc(it.t)}</b><small>${esc(books ? (it.a || it.g) : `${it.y} · ${it.g}`)}</small></span></button>`).join("") || `<p class="mut">Nothing matches these filters.</p>`;
-    libQ.innerHTML = books && D.quotes.length ? `<p class="c5 mut">Quotes I saved · ${D.quotes.length} · scroll sideways, click to read in full</p><div class="lib-qs">` + D.quotes.map((q) => `<figure class="lib-qt" tabindex="0"><blockquote lang="ru">${esc(q.q)}</blockquote><figcaption><b>${esc(q.t)}</b> · ${esc(q.a)}</figcaption></figure>`).join("") + `</div>` : "";
+    libQ.innerHTML = books && D.quotes.length ? `<div class="lib-qc" aria-roledescription="carousel" aria-label="Quotes I saved"><p class="c5 mut">Quotes I saved</p><div class="lib-qs" aria-live="polite">` + D.quotes.map((q, i) => `<figure class="lib-qt${i === qi ? " on" : ""}" aria-hidden="${i !== qi}"><blockquote lang="ru">${esc(q.q)}</blockquote><figcaption><b>${esc(q.t)}</b> · ${esc(q.a)}</figcaption></figure>`).join("")
+      + `</div><div class="lib-qn"><button class="btn ghost sm" type="button" data-qp="-1" aria-label="Previous quote">←</button>${D.quotes.map((_, i) => `<button type="button" class="lib-dot" data-qi="${i}" aria-label="Quote ${i + 1}" aria-current="${i === qi}"></button>`).join("")}<button class="btn ghost sm" type="button" data-qp="1" aria-label="Next quote">→</button></div></div>` : "";
   };
   const libOpen = (kind, from) => {
     libKind = kind; libOpener = from; pick = {};
     lib.querySelector("[data-lib-k]").textContent = kind === "book" ? "Books · 2026" : "Films · my ratings";
     lib.querySelector("[data-lib-t]").textContent = kind === "book" ? "Everything I read this year" : "Everything I watched and rated";
-    libRender(); lib.hidden = false; document.documentElement.classList.add("lib-on"); lib.querySelector("[data-lib-x]").focus();
+    libRender(); qPlay(); lib.hidden = false; document.documentElement.classList.add("lib-on"); lib.querySelector("[data-lib-x]").focus();
   };
-  const libClose = () => { lib.hidden = true; document.documentElement.classList.remove("lib-on"); libOpener && libOpener.focus(); };
+  const libClose = () => { clearInterval(qTimer); lib.hidden = true; document.documentElement.classList.remove("lib-on"); libOpener && libOpener.focus(); };
   document.querySelectorAll("[data-lib]").forEach((b) => b.addEventListener("click", () => libOpen(b.dataset.lib, b)));
   lib.addEventListener("click", (ev) => {
     const c = ev.target.closest("[data-k]"); if (c) { pick[c.dataset.k] = c.dataset.v; libRender(); return; }
-    const qt = ev.target.closest(".lib-qt"); if (qt) { qt.classList.toggle("open"); return; }
+    const qp = ev.target.closest("[data-qp]"); if (qp) { showQ(qi + +qp.dataset.qp); qPlay(); return; }
+    const qd = ev.target.closest("[data-qi]"); if (qd) { showQ(+qd.dataset.qi); qPlay(); return; }
     const it = ev.target.closest(".lib-it"); if (it) { open(libKind, +it.dataset.i, it); return; }
     if (ev.target.closest("[data-lib-x]")) libClose();
   });
